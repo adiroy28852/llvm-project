@@ -2213,10 +2213,13 @@ bool CombinerHelper::matchCombineShlOfExtend(MachineInstr &MI,
   Register LHS = MI.getOperand(1).getReg();
 
   Register ExtSrc;
+  bool IsSExt = false;
   if (!mi_match(LHS, MRI, m_GAnyExt(m_Reg(ExtSrc))) &&
-      !mi_match(LHS, MRI, m_GZExt(m_Reg(ExtSrc))) &&
-      !mi_match(LHS, MRI, m_GSExt(m_Reg(ExtSrc))))
-    return false;
+      !mi_match(LHS, MRI, m_GZExt(m_Reg(ExtSrc)))) {
+    if (!mi_match(LHS, MRI, m_GSExt(m_Reg(ExtSrc))))
+      return false;
+    IsSExt = true;
+  }
 
   Register RHS = MI.getOperand(2).getReg();
   auto MaybeShiftAmtVal = isConstantOrConstantSplatVector(RHS, MRI);
@@ -2235,12 +2238,19 @@ bool CombinerHelper::matchCombineShlOfExtend(MachineInstr &MI,
   }
 
   int64_t ShiftAmt = MaybeShiftAmtVal->getSExtValue();
+  if (ShiftAmt < 0)
+    return false;
   MatchData.Reg = ExtSrc;
   MatchData.Imm = ShiftAmt;
 
+  // The combine replaces the extend with a G_ZEXT. For a G_SEXT source that is
+  // only valid if the sign bit of the source is known to be zero. A non-zero
+  // shift amount already requires that, but a shift by zero does not.
+  int64_t RequiredLeadingZeros = IsSExt ? std::max<int64_t>(ShiftAmt, 1)
+                                        : ShiftAmt;
   unsigned MinLeadingZeros = VT->getKnownZeroes(ExtSrc).countl_one();
   unsigned SrcTySize = MRI.getType(ExtSrc).getScalarSizeInBits();
-  return MinLeadingZeros >= ShiftAmt && ShiftAmt < SrcTySize;
+  return MinLeadingZeros >= RequiredLeadingZeros && ShiftAmt < SrcTySize;
 }
 
 void CombinerHelper::applyCombineShlOfExtend(
