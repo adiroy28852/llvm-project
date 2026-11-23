@@ -2246,8 +2246,8 @@ bool CombinerHelper::matchCombineShlOfExtend(MachineInstr &MI,
   // The combine replaces the extend with a G_ZEXT. For a G_SEXT source that is
   // only valid if the sign bit of the source is known to be zero. A non-zero
   // shift amount already requires that, but a shift by zero does not.
-  int64_t RequiredLeadingZeros = IsSExt ? std::max<int64_t>(ShiftAmt, 1)
-                                        : ShiftAmt;
+  int64_t RequiredLeadingZeros =
+      IsSExt ? std::max<int64_t>(ShiftAmt, 1) : ShiftAmt;
   unsigned MinLeadingZeros = VT->getKnownZeroes(ExtSrc).countl_one();
   unsigned SrcTySize = MRI.getType(ExtSrc).getScalarSizeInBits();
   return MinLeadingZeros >= RequiredLeadingZeros && ShiftAmt < SrcTySize;
